@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from playwright.async_api import async_playwright
 from playwright.sync_api import sync_playwright
 import uvicorn
 import os
