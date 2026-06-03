@@ -58,7 +58,7 @@ async def start_session(username: str = Form(...), password: str = Form(...)):
     # بعد النجاح، يتم توجيه المستخدم تلقائياً للرابط المطلوب
     return RedirectResponse(url=REDIRECT_TARGET_URL, status_code=303)
 
-except Exception as e:
+ except Exception as e:
     # في حالة حدوث خطأ يتم عرضه على الشاشة
     return JSONResponse(content={
         "status": "error",
